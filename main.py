@@ -5,6 +5,7 @@ from colorsys import hsv_to_rgb
 
 #from Character import Character
 from Joystick import Joystick
+from Enemy import Enemy
 
 joystick = Joystick()
 
@@ -14,6 +15,8 @@ my_draw = ImageDraw.Draw(my_image)
 center_x = joystick.width // 2
 center_y = joystick.height // 2
 
+enemy = Enemy(center_x, 20)
+
 for radius in (50, 90):
     my_draw.ellipse(
         (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
@@ -21,15 +24,14 @@ for radius in (50, 90):
         width = 2
     )
 
-ship_radius = 12
+#플레이어 그리기
+ship_radius = 12 
 my_draw.ellipse(
     (center_x - ship_radius, center_y - ship_radius, center_x + ship_radius, center_y + ship_radius),
     fill = "white"
 )
 
 joystick.disp.image(my_image)
-
-print("LCD size:", my_image.size)
 
 buttons = {
     "UP": joystick.button_U,
@@ -62,9 +64,17 @@ laser = None
 laser_ends_at = 0
 last_drawn_state = None
 
+previous_time = time.monotonic()
+
 while True:
     pressed = [name for name, button in buttons.items() if not button.value]
     now = time.monotonic()
+
+    elapsed = now - previous_time # 경과 시간
+    previous_time = now 
+
+    stop_y = center_y - ship_radius - enemy.radius # y값 제한
+    enemy.y = min(enemy.y + 32 * elapsed, stop_y) # 적 위치 최신화
 
     for direction in directions:
         if direction in pressed:
@@ -80,7 +90,8 @@ while True:
     if laser is not None and now >= laser_ends_at:
         laser = None
 
-    screen_state = (aim, laser)
+    enemy_box = tuple(round(value) for value in enemy.bounds())
+    screen_state = (aim, laser, enemy_box)
 
     if screen_state != last_drawn_state:
         frame = my_image.copy()
@@ -104,6 +115,8 @@ while True:
                 width=5,
             )
 
+        draw.ellipse(enemy_box, fill="red")
+        
         joystick.disp.image(frame)
         last_drawn_state = screen_state
 
