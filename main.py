@@ -41,9 +41,38 @@ buttons = {
 }
 
 previous = []
+directions = {
+    "UP":    (0, -1),
+    "DOWN":  (0, 1),
+    "LEFT":  (-1, 0),
+    "RIGHT": (1, 0),
+}
+
+aim = "UP"
+prev_aim = None
+previous = []
+
 while True:
     pressed = [name for name, button in buttons.items() if not button.value]
+
     if pressed != previous:
         print(" + ".join(pressed) if pressed else "RELEASED")
         previous = pressed
+
+    for direction in directions:
+        if direction in pressed:
+            aim = direction
+            break
+
+    if aim != prev_aim: 
+        frame = my_image.copy()
+        draw = ImageDraw.Draw(frame)
+        dx, dy = directions[aim]
+
+        start = (center_x + dx * ship_radius, center_y + dy * ship_radius)
+        end = (center_x + dx * 30, center_y + dy * 30)
+        draw.line((start, end), fill="yellow", width=3)
+
+        joystick.disp.image(frame)
+        prev_aim = aim
     time.sleep(0.02)
