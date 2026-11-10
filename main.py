@@ -10,8 +10,22 @@ joystick = Joystick()
 
 my_image = Image.new("RGB", (joystick.width, joystick.height))
 my_draw = ImageDraw.Draw(my_image)
-my_draw.rectangle((0, 0, joystick.width, joystick.height), fill=(255, 0, 0, 100))
-my_draw.text((8, 8), "TOP LEFT", fill = "white")
+
+center_x = joystick.width // 2
+center_y = joystick.height // 2
+
+for radius in (50, 90):
+    my_draw.ellipse(
+        (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
+        outline = "#16C7F3",
+        width = 2
+    )
+
+ship_radius = 12
+my_draw.ellipse(
+    (center_x - ship_radius, center_y - ship_radius, center_x + ship_radius, center_y + ship_radius),
+    fill = "white"
+)
 
 joystick.disp.image(my_image)
 
