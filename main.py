@@ -15,8 +15,6 @@ my_draw = ImageDraw.Draw(my_image)
 center_x = joystick.width // 2
 center_y = joystick.height // 2
 
-enemy = Enemy(center_x, 20)
-
 for radius in (50, 90):
     my_draw.ellipse(
         (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
@@ -58,6 +56,10 @@ screen_edges = {
     "RIGHT": (joystick.width - 1, center_y),
 }
 
+enemies = []
+previous_time = time.monotonic()
+next_spawn_at = previous_time + 1.2
+
 aim = "UP"
 previous = []
 laser = None
@@ -73,8 +75,23 @@ while True:
     elapsed = now - previous_time # 경과 시간
     previous_time = now 
 
-    stop_y = center_y - ship_radius - enemy.radius # y값 제한
-    enemy.y = min(enemy.y + 32 * elapsed, stop_y) # 적 위치 최신화
+    for enemy in enemies:
+        enemy.distance -= 16 * elapsed
+        dx, dy = directions[enemy.direction]
+        enemy.x = center_x + dx * enemy.distance
+        enemy.y = center_y + dy * enemy.distance
+
+    enemies = [
+        enemy for enemy in enemies
+        if enemy.distance > ship_radius + enemy.radius
+    ]
+
+    if now >= next_spawn_at:
+        direction = random.choice(list(directions))
+        spawn_x, spawn_y = screen_edges[direction]
+        distance = abs(spawn_x - center_x) + abs(spawn_y - center_y)
+        enemies.append(Enemy(spawn_x, spawn_y, direction, distance))
+        next_spawn_at = now + 1.5 # 적 스폰 주기 (현재 1.5초)
 
     for direction in directions:
         if direction in pressed:
@@ -90,8 +107,11 @@ while True:
     if laser is not None and now >= laser_ends_at:
         laser = None
 
-    enemy_box = tuple(round(value) for value in enemy.bounds())
-    screen_state = (aim, laser, enemy_box)
+    enemy_boxes = tuple(
+        tuple(round(value) for value in enemy.bounds())
+        for enemy in enemies
+    )
+    screen_state = (aim, laser, enemy_boxes)
 
     if screen_state != last_drawn_state:
         frame = my_image.copy()
@@ -115,7 +135,8 @@ while True:
                 width=5,
             )
 
-        draw.ellipse(enemy_box, fill="red")
+        for enemy_box in enemy_boxes:
+            draw.ellipse(enemy_box, fill="red")
         
         joystick.disp.image(frame)
         last_drawn_state = screen_state

@@ -1,8 +1,10 @@
 class Enemy:
-    def __init__(self, x, y):
+    def __init__(self, x, y, direction, distance):
         self.x = x
         self.y = y
         self.radius = 8
+        self.direction = direction
+        self.distance = distance
 
     def bounds(self):
         return (
