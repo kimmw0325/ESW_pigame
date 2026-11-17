@@ -23,7 +23,7 @@ for radius in (50, 90):
     )
 
 #플레이어 그리기
-ship_radius = 12 
+ship_radius = 12
 my_draw.ellipse(
     (center_x - ship_radius, center_y - ship_radius, center_x + ship_radius, center_y + ship_radius),
     fill = "white"
@@ -64,29 +64,38 @@ start_draw.text(
 )
 joystick.disp.image(start_image)
 
-while joystick.button_A.value:
-    time.sleep(0.02)
-
-enemies = []
-health = 3 # 체력 개수
-game_started_at = time.monotonic()
-next_spawn_at = game_started_at + 1.2
-
-aim = "UP"
-previous = ["A"]
-laser = None
-laser_ends_at = 0
-next_shot_at = 0
-last_drawn_state = None
-
-previous_time = time.monotonic()
+new_round = True
 
 while True:
+    if new_round:
+        # A를 누르고 있으면 손을 뗄 때까지 기다린다.
+        while not joystick.button_A.value:
+            time.sleep(0.02)
+
+        # A를 새로 누르면 한 판을 시작한다.
+        while joystick.button_A.value:
+            time.sleep(0.02)
+
+        enemies = []
+        health = 3 # 체력 개수
+        game_started_at = time.monotonic()
+        next_spawn_at = game_started_at + 1.2
+
+        aim = "UP"
+        previous = ["A"] # 시작할 때 누른 A로 바로 발사되는 걸 막는다.
+        laser = None
+        laser_ends_at = 0
+        next_shot_at = 0
+        last_drawn_state = None
+        previous_time = game_started_at
+
+        new_round = False
+
     pressed = [name for name, button in buttons.items() if not button.value]
     now = time.monotonic()
 
     elapsed = now - previous_time # 경과 시간
-    previous_time = now 
+    previous_time = now
 
     for enemy in enemies:
         enemy.distance -= 20 * elapsed # 적 이동속도
@@ -105,14 +114,13 @@ while True:
     if health == 0:
         game_over_image = Image.new("RGB", my_image.size)
         game_over_draw = ImageDraw.Draw(game_over_image)
-        game_over_draw.text(
-            (center_x, center_y),
-            "GAME OVER",
-            fill="white",
-            anchor="mm",
-        )
+
+        game_over_draw.text((center_x, center_y - 15), "GAME OVER", fill="white", anchor="mm")
+        game_over_draw.text((center_x, center_y + 15), "PRESS A TO RETRY", fill="white", anchor="mm")
+
         joystick.disp.image(game_over_image)
-        break
+        new_round = True
+        continue
 
     if now >= next_spawn_at:
         direction = random.choice(list(directions))
@@ -124,7 +132,7 @@ while True:
         enemy_type = random.choice(("A", "B"))
 
         enemies.append(Enemy(spawn_x, spawn_y, direction, distance, enemy_type))
-        
+
         game_elapsed = now - game_started_at
         difficulty_level = int(game_elapsed // 5)
         spawn_interval = max(0.75, 1.5 - 0.25 * difficulty_level) # 적 스폰 간격(최소 0.75)
@@ -209,17 +217,10 @@ while True:
             else:
                 draw.rectangle(enemy_box, fill=color)
 
-        draw.text((8, 8), f"HP: {health}", fill="white") # 화면에 HP 표시 
-        
+        draw.text((8, 8), f"HP: {health}", fill="white") # 화면에 HP 표시
+
         joystick.disp.image(frame)
         last_drawn_state = screen_state
 
     previous = pressed
     time.sleep(0.02)
-
-# 게임은 끝났고, LCD에 종료 화면을 띄운 채로 대기한다.
-try:
-    while True:
-        time.sleep(0.25)
-except KeyboardInterrupt:
-    pass
