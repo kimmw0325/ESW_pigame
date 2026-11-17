@@ -57,6 +57,7 @@ screen_edges = {
 }
 
 enemies = []
+health = 3 # 체력 개수
 previous_time = time.monotonic()
 next_spawn_at = previous_time + 1.2
 
@@ -82,10 +83,13 @@ while True:
         enemy.x = center_x + dx * enemy.distance
         enemy.y = center_y + dy * enemy.distance
 
+    enemy_count_before_contact = len(enemies)
     enemies = [
         enemy for enemy in enemies
         if enemy.distance > ship_radius + enemy.radius
     ]
+    damage = enemy_count_before_contact - len(enemies)
+    health = max(0, health - damage)
 
     if now >= next_spawn_at:
         direction = random.choice(list(directions))
@@ -132,7 +136,7 @@ while True:
     )
 
     cooldown_active = now < next_shot_at
-    screen_state = (aim, laser, enemy_state, cooldown_active)
+    screen_state = (aim, laser, enemy_state, cooldown_active, health)
 
     if screen_state != last_drawn_state:
         frame = my_image.copy()
@@ -173,6 +177,8 @@ while True:
                 draw.ellipse(enemy_box, fill=color)
             else:
                 draw.rectangle(enemy_box, fill=color)
+
+        draw.text((8, 8), f"HP: {health}", fill="white") # 화면에 HP 표시 
         
         joystick.disp.image(frame)
         last_drawn_state = screen_state
