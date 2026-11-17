@@ -29,8 +29,6 @@ my_draw.ellipse(
     fill = "white"
 )
 
-joystick.disp.image(my_image)
-
 buttons = {
     "UP": joystick.button_U,
     "DOWN": joystick.button_D,
@@ -56,13 +54,26 @@ screen_edges = {
     "RIGHT": (joystick.width - 1, center_y),
 }
 
+start_image = Image.new("RGB", my_image.size)
+start_draw = ImageDraw.Draw(start_image)
+start_draw.text(
+    (center_x, center_y - 15), "SPACE PEWPEW", fill="white", anchor="mm"
+)
+start_draw.text(
+    (center_x, center_y + 15), "PRESS A TO START", fill="white", anchor="mm"
+)
+joystick.disp.image(start_image)
+
+while joystick.button_A.value:
+    time.sleep(0.02)
+
 enemies = []
 health = 3 # 체력 개수
 game_started_at = time.monotonic()
 next_spawn_at = game_started_at + 1.2
 
 aim = "UP"
-previous = []
+previous = ["A"]
 laser = None
 laser_ends_at = 0
 next_shot_at = 0
@@ -78,7 +89,7 @@ while True:
     previous_time = now 
 
     for enemy in enemies:
-        enemy.distance -= 16 * elapsed # 적 이동속도
+        enemy.distance -= 20 * elapsed # 적 이동속도
         dx, dy = directions[enemy.direction]
         enemy.x = center_x + dx * enemy.distance
         enemy.y = center_y + dy * enemy.distance
@@ -116,7 +127,7 @@ while True:
         
         game_elapsed = now - game_started_at
         difficulty_level = int(game_elapsed // 5)
-        spawn_interval = max(0.75, 1.5 - 0.25 * difficulty_level)
+        spawn_interval = max(0.75, 1.5 - 0.25 * difficulty_level) # 적 스폰 간격(최소 0.75)
         next_spawn_at = now + spawn_interval
 
     for direction in directions:
