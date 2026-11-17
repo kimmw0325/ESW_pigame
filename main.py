@@ -64,6 +64,7 @@ aim = "UP"
 previous = []
 laser = None
 laser_ends_at = 0
+next_shot_at = 0
 last_drawn_state = None
 
 previous_time = time.monotonic()
@@ -100,10 +101,15 @@ while True:
             break
 
     for button_name, color in laser_colors.items():
-        if button_name in pressed and button_name not in previous:
+        if (
+            button_name in pressed
+            and button_name not in previous
+            and now >= next_shot_at
+        ):
             laser = (aim, color)
             laser_ends_at = now + 0.15
 
+            enemy_count_before = len(enemies)
             enemies = [
                 enemy for enemy in enemies
                 if not (
@@ -111,6 +117,9 @@ while True:
                     and enemy.enemy_type == button_name
                 )
             ]
+
+            if len(enemies) == enemy_count_before:
+                next_shot_at = now + 1
 
             break
 
@@ -121,11 +130,24 @@ while True:
         (enemy.enemy_type, tuple(round(value) for value in enemy.bounds()))
         for enemy in enemies
     )
-    screen_state = (aim, laser, enemy_state)
+
+    cooldown_active = now < next_shot_at
+    screen_state = (aim, laser, enemy_state, cooldown_active)
 
     if screen_state != last_drawn_state:
         frame = my_image.copy()
         draw = ImageDraw.Draw(frame)
+
+        if cooldown_active:
+            draw.ellipse(
+                (
+                    center_x - ship_radius,
+                    center_y - ship_radius,
+                    center_x + ship_radius,
+                    center_y + ship_radius,
+                ),
+                fill="#FF8C00",
+            )
 
         dx, dy = directions[aim]
         start = (center_x + dx * ship_radius, center_y + dy * ship_radius)
