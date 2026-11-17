@@ -7,6 +7,7 @@ from Enemy import Enemy
 
 SPAWN_INTERVAL = 1.2
 ENEMY_SPEED = 32
+MISS_COOLDOWN = 0.5
 
 
 def play(joystick):
@@ -58,6 +59,7 @@ def play(joystick):
     previous = []
     laser = None
     laser_ends_at = 0
+    next_shot_at = 0
     last_drawn_state = None
     enemies = []
     previous_time = time.monotonic()
@@ -92,11 +94,20 @@ def play(joystick):
                 aim = direction
                 break
 
-        for button_name, color in laser_colors.items():
-            if button_name in pressed and button_name not in previous:
-                laser = (aim, color)
-                laser_ends_at = now + 0.15
-                break
+        if now >= next_shot_at:
+            for button_name, color in laser_colors.items():
+                if button_name in pressed and button_name not in previous:
+                    laser = (aim, color)
+                    laser_ends_at = now + 0.15
+
+                    remaining = [
+                        enemy for enemy in enemies
+                        if (enemy.direction, enemy.enemy_type) != (aim, button_name)
+                    ]
+                    if len(remaining) == len(enemies):
+                        next_shot_at = now + MISS_COOLDOWN
+                    enemies = remaining
+                    break
 
         if laser is not None and now >= laser_ends_at:
             laser = None
