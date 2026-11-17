@@ -58,8 +58,8 @@ screen_edges = {
 
 enemies = []
 health = 3 # 체력 개수
-previous_time = time.monotonic()
-next_spawn_at = previous_time + 1.2
+game_started_at = time.monotonic()
+next_spawn_at = game_started_at + 1.2
 
 aim = "UP"
 previous = []
@@ -105,11 +105,19 @@ while True:
 
     if now >= next_spawn_at:
         direction = random.choice(list(directions))
+
         spawn_x, spawn_y = screen_edges[direction]
+
         distance = abs(spawn_x - center_x) + abs(spawn_y - center_y)
+
         enemy_type = random.choice(("A", "B"))
+
         enemies.append(Enemy(spawn_x, spawn_y, direction, distance, enemy_type))
-        next_spawn_at = now + 1.5 # 적 스폰 주기 (현재 1.5초)
+        
+        game_elapsed = now - game_started_at
+        difficulty_level = int(game_elapsed // 5)
+        spawn_interval = max(0.75, 1.5 - 0.25 * difficulty_level)
+        next_spawn_at = now + spawn_interval
 
     for direction in directions:
         if direction in pressed:
