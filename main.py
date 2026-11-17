@@ -76,7 +76,7 @@ while True:
     previous_time = now 
 
     for enemy in enemies:
-        enemy.distance -= 16 * elapsed
+        enemy.distance -= 16 * elapsed # 적 이동속도
         dx, dy = directions[enemy.direction]
         enemy.x = center_x + dx * enemy.distance
         enemy.y = center_y + dy * enemy.distance
@@ -90,7 +90,8 @@ while True:
         direction = random.choice(list(directions))
         spawn_x, spawn_y = screen_edges[direction]
         distance = abs(spawn_x - center_x) + abs(spawn_y - center_y)
-        enemies.append(Enemy(spawn_x, spawn_y, direction, distance))
+        enemy_type = random.choice(("A", "B"))
+        enemies.append(Enemy(spawn_x, spawn_y, direction, distance, enemy_type))
         next_spawn_at = now + 1.5 # 적 스폰 주기 (현재 1.5초)
 
     for direction in directions:
@@ -107,11 +108,11 @@ while True:
     if laser is not None and now >= laser_ends_at:
         laser = None
 
-    enemy_boxes = tuple(
-        tuple(round(value) for value in enemy.bounds())
+    enemy_state = tuple(
+        (enemy.enemy_type, tuple(round(value) for value in enemy.bounds()))
         for enemy in enemies
     )
-    screen_state = (aim, laser, enemy_boxes)
+    screen_state = (aim, laser, enemy_state)
 
     if screen_state != last_drawn_state:
         frame = my_image.copy()
@@ -135,8 +136,12 @@ while True:
                 width=5,
             )
 
-        for enemy_box in enemy_boxes:
-            draw.ellipse(enemy_box, fill="red")
+        for enemy_type, enemy_box in enemy_state:
+            color = laser_colors[enemy_type]
+            if enemy_type == "A":
+                draw.ellipse(enemy_box, fill=color)
+            else:
+                draw.rectangle(enemy_box, fill=color)
         
         joystick.disp.image(frame)
         last_drawn_state = screen_state
