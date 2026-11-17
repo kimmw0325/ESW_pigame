@@ -1,111 +1,148 @@
-from PIL import Image, ImageDraw, ImageFont
-import time
 import random
-from colorsys import hsv_to_rgb
+import time
 
-#from Character import Character
-from Joystick import Joystick
+from PIL import Image, ImageDraw
 
-joystick = Joystick()
+from Enemy import Enemy
 
-my_image = Image.new("RGB", (joystick.width, joystick.height))
-my_draw = ImageDraw.Draw(my_image)
+SPAWN_INTERVAL = 1.2
+ENEMY_SPEED = 32
 
-center_x = joystick.width // 2
-center_y = joystick.height // 2
 
-for radius in (50, 90):
+def play(joystick):
+    my_image = Image.new("RGB", (joystick.width, joystick.height))
+    my_draw = ImageDraw.Draw(my_image)
+
+    center_x = joystick.width // 2
+    center_y = joystick.height // 2
+
+    for radius in (50, 90):
+        my_draw.ellipse(
+            (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
+            outline="#16C7F3",
+            width=2,
+        )
+
+    ship_radius = 12
     my_draw.ellipse(
-        (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
-        outline = "#16C7F3",
-        width = 2
+        (center_x - ship_radius, center_y - ship_radius, center_x + ship_radius, center_y + ship_radius),
+        fill="white",
     )
 
-ship_radius = 12
-my_draw.ellipse(
-    (center_x - ship_radius, center_y - ship_radius, center_x + ship_radius, center_y + ship_radius),
-    fill = "white"
-)
+    buttons = {
+        "UP": joystick.button_U,
+        "DOWN": joystick.button_D,
+        "LEFT": joystick.button_L,
+        "RIGHT": joystick.button_R,
+        "A": joystick.button_A,
+        "B": joystick.button_B,
+    }
 
-joystick.disp.image(my_image)
+    directions = {
+        "UP":    (0, -1),
+        "DOWN":  (0, 1),
+        "LEFT":  (-1, 0),
+        "RIGHT": (1, 0),
+    }
 
-print("LCD size:", my_image.size)
+    laser_colors = {"A": "red", "B": "lime"}
 
-buttons = {
-    "UP": joystick.button_U,
-    "DOWN": joystick.button_D,
-    "LEFT": joystick.button_L,
-    "RIGHT": joystick.button_R,
-    "A": joystick.button_A,
-    "B": joystick.button_B,
-}
+    screen_edges = {
+        "UP":    (center_x, 0),
+        "DOWN":  (center_x, joystick.height - 1),
+        "LEFT":  (0, center_y),
+        "RIGHT": (joystick.width - 1, center_y),
+    }
 
-directions = {
-    "UP":    (0, -1),
-    "DOWN":  (0, 1),
-    "LEFT":  (-1, 0),
-    "RIGHT": (1, 0),
-}
+    aim = "UP"
+    previous = []
+    laser = None
+    laser_ends_at = 0
+    last_drawn_state = None
+    enemies = []
+    previous_time = time.monotonic()
+    next_spawn_at = previous_time + SPAWN_INTERVAL
 
-laser_colors = {"A": "red", "B": "lime"}
+    while True:
+        pressed = [name for name, button in buttons.items() if not button.value]
+        now = time.monotonic()
+        elapsed = now - previous_time
+        previous_time = now
 
-screen_edges = {
-    "UP":    (center_x, 0),
-    "DOWN":  (center_x, joystick.height - 1),
-    "LEFT":  (0, center_y),
-    "RIGHT": (joystick.width - 1, center_y),
-}
+        for enemy in enemies:
+            dx, dy = directions[enemy.direction]
+            enemy.move(dx, dy, ENEMY_SPEED * elapsed)
 
-aim = "UP"
-previous = []
-laser = None
-laser_ends_at = 0
-last_drawn_state = None
+        # The enemy's leading edge touches the ship at this distance.
+        enemies = [
+            enemy for enemy in enemies
+            if enemy.distance > ship_radius + enemy.radius
+        ]
 
-while True:
-    pressed = [name for name, button in buttons.items() if not button.value]
-    now = time.monotonic()
+        if now >= next_spawn_at:
+            direction = random.choice(tuple(directions))
+            enemy_type = random.choice(tuple(laser_colors))
+            spawn_x, spawn_y = screen_edges[direction]
+            distance = abs(spawn_x - center_x) + abs(spawn_y - center_y)
+            enemies.append(Enemy((spawn_x, spawn_y), direction, enemy_type, distance))
+            next_spawn_at = now + SPAWN_INTERVAL
 
-    for direction in directions:
-        if direction in pressed:
-            aim = direction
-            break
+        for direction in directions:
+            if direction in pressed:
+                aim = direction
+                break
 
-    for button_name, color in laser_colors.items():
-        if button_name in pressed and button_name not in previous:
-            laser = (aim, color)
-            laser_ends_at = now + 0.15
-            break
+        for button_name, color in laser_colors.items():
+            if button_name in pressed and button_name not in previous:
+                laser = (aim, color)
+                laser_ends_at = now + 0.15
+                break
 
-    if laser is not None and now >= laser_ends_at:
-        laser = None
+        if laser is not None and now >= laser_ends_at:
+            laser = None
 
-    screen_state = (aim, laser)
+        enemy_screen_state = tuple(
+            (enemy.enemy_type, enemy.position) for enemy in enemies
+        )
+        screen_state = (aim, laser, enemy_screen_state)
 
-    if screen_state != last_drawn_state:
-        frame = my_image.copy()
-        draw = ImageDraw.Draw(frame)
+        if screen_state != last_drawn_state:
+            frame = my_image.copy()
+            draw = ImageDraw.Draw(frame)
 
-        dx, dy = directions[aim]
-        start = (center_x + dx * ship_radius, center_y + dy * ship_radius)
-        end = (center_x + dx * 30, center_y + dy * 30)
-        draw.line((start, end), fill="yellow", width=3)
+            dx, dy = directions[aim]
+            start = (center_x + dx * ship_radius, center_y + dy * ship_radius)
+            end = (center_x + dx * 30, center_y + dy * 30)
+            draw.line((start, end), fill="yellow", width=3)
 
-        if laser is not None:
-            laser_direction, laser_color = laser
-            dx, dy = directions[laser_direction]
-            laser_start = (
-                center_x + dx * ship_radius,
-                center_y + dy * ship_radius,
-            )
-            draw.line(
-                (laser_start, screen_edges[laser_direction]),
-                fill=laser_color,
-                width=5,
-            )
+            if laser is not None:
+                laser_direction, laser_color = laser
+                dx, dy = directions[laser_direction]
+                laser_start = (
+                    center_x + dx * ship_radius,
+                    center_y + dy * ship_radius,
+                )
+                draw.line(
+                    (laser_start, screen_edges[laser_direction]),
+                    fill=laser_color,
+                    width=5,
+                )
 
-        joystick.disp.image(frame)
-        last_drawn_state = screen_state
+            for enemy in enemies:
+                color = laser_colors[enemy.enemy_type]
+                if enemy.appearance == "circle":
+                    draw.ellipse(enemy.position, fill=color)
+                else:
+                    draw.rectangle(enemy.position, fill=color)
 
-    previous = pressed
-    time.sleep(0.02)
+            joystick.disp.image(frame)
+            last_drawn_state = screen_state
+
+        previous = pressed
+        time.sleep(0.02)
+
+
+if __name__ == "__main__":
+    from Joystick import Joystick
+
+    play(Joystick())
