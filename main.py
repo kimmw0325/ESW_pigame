@@ -103,6 +103,15 @@ while True:
         if button_name in pressed and button_name not in previous:
             laser = (aim, color)
             laser_ends_at = now + 0.15
+
+            enemies = [
+                enemy for enemy in enemies
+                if not (
+                    enemy.direction == aim
+                    and enemy.enemy_type == button_name
+                )
+            ]
+
             break
 
     if laser is not None and now >= laser_ends_at:
