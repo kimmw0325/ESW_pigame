@@ -8,6 +8,7 @@ from Enemy import Enemy
 SPAWN_INTERVAL = 1.2
 ENEMY_SPEED = 32
 MISS_COOLDOWN = 0.5
+STARTING_HEALTH = 3
 
 
 def play(joystick):
@@ -62,6 +63,7 @@ def play(joystick):
     next_shot_at = 0
     last_drawn_state = None
     enemies = []
+    health = STARTING_HEALTH
     previous_time = time.monotonic()
     next_spawn_at = previous_time + SPAWN_INTERVAL
 
@@ -76,10 +78,19 @@ def play(joystick):
             enemy.move(dx, dy, ENEMY_SPEED * elapsed)
 
         # The enemy's leading edge touches the ship at this distance.
-        enemies = [
+        remaining = [
             enemy for enemy in enemies
             if enemy.distance > ship_radius + enemy.radius
         ]
+        health = max(0, health - (len(enemies) - len(remaining)))
+        enemies = remaining
+
+        if health == 0:
+            frame = Image.new("RGB", my_image.size)
+            draw = ImageDraw.Draw(frame)
+            draw.text((center_x, center_y), "GAME OVER", fill="white", anchor="mm")
+            joystick.disp.image(frame)
+            return
 
         if now >= next_spawn_at:
             direction = random.choice(tuple(directions))
@@ -115,7 +126,7 @@ def play(joystick):
         enemy_screen_state = tuple(
             (enemy.enemy_type, enemy.position) for enemy in enemies
         )
-        screen_state = (aim, laser, enemy_screen_state)
+        screen_state = (aim, laser, enemy_screen_state, health)
 
         if screen_state != last_drawn_state:
             frame = my_image.copy()
@@ -146,6 +157,7 @@ def play(joystick):
                 else:
                     draw.rectangle(enemy.position, fill=color)
 
+            draw.text((8, 8), f"HP: {health}", fill="white")
             joystick.disp.image(frame)
             last_drawn_state = screen_state
 
@@ -156,4 +168,11 @@ def play(joystick):
 if __name__ == "__main__":
     from Joystick import Joystick
 
-    play(Joystick())
+    joystick = Joystick()
+    try:
+        play(joystick)
+        # Keep the display and backlight active on the game-over screen.
+        while True:
+            time.sleep(0.25)
+    except KeyboardInterrupt:
+        pass
