@@ -91,6 +91,18 @@ while True:
     damage = enemy_count_before_contact - len(enemies)
     health = max(0, health - damage)
 
+    if health == 0:
+        game_over_image = Image.new("RGB", my_image.size)
+        game_over_draw = ImageDraw.Draw(game_over_image)
+        game_over_draw.text(
+            (center_x, center_y),
+            "GAME OVER",
+            fill="white",
+            anchor="mm",
+        )
+        joystick.disp.image(game_over_image)
+        break
+
     if now >= next_spawn_at:
         direction = random.choice(list(directions))
         spawn_x, spawn_y = screen_edges[direction]
@@ -185,3 +197,10 @@ while True:
 
     previous = pressed
     time.sleep(0.02)
+
+# 게임은 끝났고, LCD에 종료 화면을 띄운 채로 대기한다.
+try:
+    while True:
+        time.sleep(0.25)
+except KeyboardInterrupt:
+    pass
