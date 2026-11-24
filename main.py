@@ -18,6 +18,7 @@ with Image.open(assets_dir / "background.png") as image:
 center_x = joystick.width // 2
 center_y = joystick.height // 2
 ship_radius = 12
+max_health = 3
 muzzle_distance = 19
 
 
@@ -94,7 +95,7 @@ while True:
             time.sleep(0.02)
 
         enemies = []
-        health = 3 # 체력 개수
+        health = max_health # 체력 개수
         game_started_at = time.monotonic()
         next_spawn_at = game_started_at + 1.2
 
@@ -222,8 +223,16 @@ while True:
             sprite = enemy_sprites[enemy_type]
             frame.paste(sprite, enemy_box[:2], sprite)
 
-        draw.text((8, 8), f"HP: {health}", fill="white") # 화면에 HP 표시
+        draw.text((8, 8), "HP", fill="white")
 
+        for index in range(max_health):
+            x = 28 + index * 16
+            color = "#55F2AD" if index < health else "#14263B"
+            draw.rectangle(
+                (x, 8, x + 11, 17),
+                fill=color,
+                outline="#41617A",
+            )
         joystick.disp.image(frame)
         last_drawn_state = screen_state
 
