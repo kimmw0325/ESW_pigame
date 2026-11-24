@@ -1,6 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import time
 import random
+from pathlib import Path
 from colorsys import hsv_to_rgb
 
 #from Character import Character
@@ -9,25 +10,41 @@ from Enemy import Enemy
 
 joystick = Joystick()
 
-my_image = Image.new("RGB", (joystick.width, joystick.height))
-my_draw = ImageDraw.Draw(my_image)
+assets_dir = Path(__file__).resolve().parent / "assets"
+
+with Image.open(assets_dir / "background.png") as image:
+    my_image = image.convert("RGB")
 
 center_x = joystick.width // 2
 center_y = joystick.height // 2
-
-for radius in (50, 90):
-    my_draw.ellipse(
-        (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
-        outline = "#16C7F3",
-        width = 2
-    )
-
-#플레이어 그리기
 ship_radius = 12
-my_draw.ellipse(
-    (center_x - ship_radius, center_y - ship_radius, center_x + ship_radius, center_y + ship_radius),
-    fill = "white"
-)
+muzzle_distance = 19
+
+
+def load_sprite(filename):
+    with Image.open(assets_dir / filename) as image:
+        return image.convert("RGBA")
+
+
+def turret_rotations(filename):
+    up = load_sprite(filename)
+    return {
+        "UP": up,
+        "RIGHT": up.transpose(Image.Transpose.ROTATE_270),
+        "DOWN": up.transpose(Image.Transpose.ROTATE_180),
+        "LEFT": up.transpose(Image.Transpose.ROTATE_90),
+    }
+
+
+turrets = {
+    False: turret_rotations("turret_up.png"),
+    True: turret_rotations("turret_locked_up.png"),
+}
+
+enemy_sprites = {
+    "A": load_sprite("enemy_a.png"),
+    "B": load_sprite("enemy_b.png"),
+}
 
 buttons = {
     "UP": joystick.button_U,
@@ -45,7 +62,7 @@ directions = {
     "RIGHT": (1, 0),
 }
 
-laser_colors = {"A": "red", "B": "lime"}
+laser_colors = {"A": "#FF4855", "B": "#59CCFF"}
 
 screen_edges = {
     "UP":    (center_x, 0),
@@ -181,28 +198,19 @@ while True:
         frame = my_image.copy()
         draw = ImageDraw.Draw(frame)
 
-        if cooldown_active:
-            draw.ellipse(
-                (
-                    center_x - ship_radius,
-                    center_y - ship_radius,
-                    center_x + ship_radius,
-                    center_y + ship_radius,
-                ),
-                fill="#FF8C00",
-            )
-
-        dx, dy = directions[aim]
-        start = (center_x + dx * ship_radius, center_y + dy * ship_radius)
-        end = (center_x + dx * 30, center_y + dy * 30)
-        draw.line((start, end), fill="yellow", width=3)
+        turret = turrets[cooldown_active][aim]
+        frame.paste(
+            turret,
+            (center_x - turret.width // 2, center_y - turret.height // 2),
+            turret,
+        )
 
         if laser is not None:
             laser_direction, laser_color = laser
             dx, dy = directions[laser_direction]
             laser_start = (
-                center_x + dx * ship_radius,
-                center_y + dy * ship_radius,
+                center_x + dx * muzzle_distance,
+                center_y + dy * muzzle_distance,
             )
             draw.line(
                 (laser_start, screen_edges[laser_direction]),
@@ -211,11 +219,8 @@ while True:
             )
 
         for enemy_type, enemy_box in enemy_state:
-            color = laser_colors[enemy_type]
-            if enemy_type == "A":
-                draw.ellipse(enemy_box, fill=color)
-            else:
-                draw.rectangle(enemy_box, fill=color)
+            sprite = enemy_sprites[enemy_type]
+            frame.paste(sprite, enemy_box[:2], sprite)
 
         draw.text((8, 8), f"HP: {health}", fill="white") # 화면에 HP 표시
 
