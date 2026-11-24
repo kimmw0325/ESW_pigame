@@ -1,6 +1,8 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 import time
 import random
+from pathlib import Path
+from math import atan2, sin, cos
 from colorsys import hsv_to_rgb
 
 #from Character import Character
@@ -9,25 +11,47 @@ from Enemy import Enemy
 
 joystick = Joystick()
 
-my_image = Image.new("RGB", (joystick.width, joystick.height))
-my_draw = ImageDraw.Draw(my_image)
+assets_dir = Path(__file__).resolve().parent / "assets"
+
+with Image.open(assets_dir / "background.png") as image:
+    my_image = image.convert("RGB")
 
 center_x = joystick.width // 2
 center_y = joystick.height // 2
-
-for radius in (50, 90):
-    my_draw.ellipse(
-        (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
-        outline = "#16C7F3",
-        width = 2
-    )
-
-#플레이어 그리기
 ship_radius = 12
-my_draw.ellipse(
-    (center_x - ship_radius, center_y - ship_radius, center_x + ship_radius, center_y + ship_radius),
-    fill = "white"
-)
+max_health = 3
+muzzle_distance = 19
+
+
+def load_sprite(filename):
+    with Image.open(assets_dir / filename) as image:
+        return image.convert("RGBA")
+
+
+def turret_rotations(filename):
+    up = load_sprite(filename)
+    return {
+        "UP": up,
+        "RIGHT": up.transpose(Image.Transpose.ROTATE_270),
+        "DOWN": up.transpose(Image.Transpose.ROTATE_180),
+        "LEFT": up.transpose(Image.Transpose.ROTATE_90),
+    }
+
+
+turrets = {
+    False: turret_rotations("turret_up.png"),
+    True: turret_rotations("turret_locked_up.png"),
+}
+
+enemy_sprites = {
+    "A": load_sprite("enemy_a.png"),
+    "B": load_sprite("enemy_b.png"),
+}
+
+spiral_sprites = {
+    "A": load_sprite("enemy_c.png"),
+    "B": load_sprite("enemy_d.png"),
+}
 
 buttons = {
     "UP": joystick.button_U,
@@ -45,7 +69,7 @@ directions = {
     "RIGHT": (1, 0),
 }
 
-laser_colors = {"A": "red", "B": "lime"}
+laser_colors = {"A": "#FF4855", "B": "#59CCFF"}
 
 screen_edges = {
     "UP":    (center_x, 0),
@@ -53,6 +77,46 @@ screen_edges = {
     "LEFT":  (0, center_y),
     "RIGHT": (joystick.width - 1, center_y),
 }
+
+beam_widths = {
+    laser_colors["A"]: 9,
+    laser_colors["B"]: 13,
+}
+
+beam_edge_colors = {
+    laser_colors["A"]: "#B91D39",
+    laser_colors["B"]: "#207AAE",
+}
+
+def beam_segment(direction):
+    dx, dy = directions[direction]
+    start = (
+        center_x + dx * muzzle_distance,
+        center_y + dy * muzzle_distance,
+    )
+    return start, screen_edges[direction]
+
+
+beam_masks = {}
+
+for direction in directions:
+    for color, width in beam_widths.items():
+        mask = Image.new("L", my_image.size)
+        ImageDraw.Draw(mask).line(beam_segment(direction), fill=255, width=width)
+        beam_masks[direction, color] = mask
+
+
+def laser_hits(enemy, direction, color):
+    sprites = enemy_sprites if enemy.spiral_angle is None else spiral_sprites
+    sprite = sprites[enemy.enemy_type]
+
+    left, top = (round(value) for value in enemy.bounds()[:2])
+    beam_area = beam_masks[direction, color].crop(
+        (left, top, left + sprite.width, top + sprite.height)
+    )
+
+    overlap = ImageChops.multiply(beam_area, sprite.getchannel("A"))
+    return overlap.getbbox() is not None
 
 start_image = Image.new("RGB", my_image.size)
 start_draw = ImageDraw.Draw(start_image)
@@ -77,7 +141,7 @@ while True:
             time.sleep(0.02)
 
         enemies = []
-        health = 3 # 체력 개수
+        health = max_health # 체력 개수
         game_started_at = time.monotonic()
         next_spawn_at = game_started_at + 1.2
 
@@ -97,9 +161,21 @@ while True:
     elapsed = now - previous_time # 경과 시간
     previous_time = now
 
+    game_elapsed = now - game_started_at
+    enemy_speed = min(55, 25 + game_elapsed)
+    spiral_speed = min(15, 14 + 0.10 * game_elapsed)
+
     for enemy in enemies:
-        enemy.distance -= 20 * elapsed # 적 이동속도
-        dx, dy = directions[enemy.direction]
+        if enemy.spiral_angle is None:
+            speed = enemy_speed
+            dx, dy = directions[enemy.direction]
+        else:
+            speed = spiral_speed
+            enemy.spiral_angle += 1.6 * elapsed
+            dx = cos(enemy.spiral_angle)
+            dy = sin(enemy.spiral_angle)
+
+        enemy.distance -= speed * elapsed
         enemy.x = center_x + dx * enemy.distance
         enemy.y = center_y + dy * enemy.distance
 
@@ -131,7 +207,17 @@ while True:
 
         enemy_type = random.choice(("A", "B"))
 
-        enemies.append(Enemy(spawn_x, spawn_y, direction, distance, enemy_type))
+        spiral_angle = None
+
+        if game_elapsed >= 5 and random.random() < 0.20:
+            spiral_angle = atan2(spawn_y - center_y, spawn_x - center_x)
+
+        enemies.append(
+            Enemy(
+                spawn_x, spawn_y, direction, distance, enemy_type,
+                spiral_angle=spiral_angle,
+            )
+        )
 
         game_elapsed = now - game_started_at
         difficulty_level = int(game_elapsed // 5)
@@ -156,8 +242,8 @@ while True:
             enemies = [
                 enemy for enemy in enemies
                 if not (
-                    enemy.direction == aim
-                    and enemy.enemy_type == button_name
+                    enemy.enemy_type == button_name
+                    and laser_hits(enemy, aim, color)
                 )
             ]
 
@@ -170,7 +256,11 @@ while True:
         laser = None
 
     enemy_state = tuple(
-        (enemy.enemy_type, tuple(round(value) for value in enemy.bounds()))
+        (
+            enemy.enemy_type,
+            enemy.spiral_angle is not None,
+            tuple(round(value) for value in enemy.bounds()),
+        )
         for enemy in enemies
     )
 
@@ -181,44 +271,37 @@ while True:
         frame = my_image.copy()
         draw = ImageDraw.Draw(frame)
 
-        if cooldown_active:
-            draw.ellipse(
-                (
-                    center_x - ship_radius,
-                    center_y - ship_radius,
-                    center_x + ship_radius,
-                    center_y + ship_radius,
-                ),
-                fill="#FF8C00",
-            )
-
-        dx, dy = directions[aim]
-        start = (center_x + dx * ship_radius, center_y + dy * ship_radius)
-        end = (center_x + dx * 30, center_y + dy * 30)
-        draw.line((start, end), fill="yellow", width=3)
+        turret = turrets[cooldown_active][aim]
+        frame.paste(
+            turret,
+            (center_x - turret.width // 2, center_y - turret.height // 2),
+            turret,
+        )
 
         if laser is not None:
             laser_direction, laser_color = laser
-            dx, dy = directions[laser_direction]
-            laser_start = (
-                center_x + dx * ship_radius,
-                center_y + dy * ship_radius,
+            beam = beam_segment(laser_direction)
+            width = beam_widths[laser_color]
+
+            draw.line(beam, fill=beam_edge_colors[laser_color], width=width)
+            draw.line(beam, fill=laser_color, width=width - 4)
+            draw.line(beam, fill="#F7FAFF", width=3)
+
+        for enemy_type, is_spiral, enemy_box in enemy_state:
+            sprites = spiral_sprites if is_spiral else enemy_sprites
+            sprite = sprites[enemy_type]
+            frame.paste(sprite, enemy_box[:2], sprite)
+
+        draw.text((8, 8), "HP", fill="white")
+
+        for index in range(max_health):
+            x = 28 + index * 16
+            color = "#55F2AD" if index < health else "#14263B"
+            draw.rectangle(
+                (x, 8, x + 11, 17),
+                fill=color,
+                outline="#41617A",
             )
-            draw.line(
-                (laser_start, screen_edges[laser_direction]),
-                fill=laser_color,
-                width=5,
-            )
-
-        for enemy_type, enemy_box in enemy_state:
-            color = laser_colors[enemy_type]
-            if enemy_type == "A":
-                draw.ellipse(enemy_box, fill=color)
-            else:
-                draw.rectangle(enemy_box, fill=color)
-
-        draw.text((8, 8), f"HP: {health}", fill="white") # 화면에 HP 표시
-
         joystick.disp.image(frame)
         last_drawn_state = screen_state
 
