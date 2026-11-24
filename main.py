@@ -115,8 +115,11 @@ while True:
     elapsed = now - previous_time # 경과 시간
     previous_time = now
 
+    game_elapsed = now - game_started_at
+    enemy_speed = min(55, 25 + game_elapsed)
+
     for enemy in enemies:
-        enemy.distance -= 20 * elapsed # 적 이동속도
+        enemy.distance -= enemy_speed * elapsed # 적 이동속도
         dx, dy = directions[enemy.direction]
         enemy.x = center_x + dx * enemy.distance
         enemy.y = center_y + dy * enemy.distance
